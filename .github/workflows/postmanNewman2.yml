@@ -1,0 +1,61 @@
+name: Test-Build
+on:
+    push:
+        branches:
+            - main
+jobs:
+    test-and-report:
+        runs-on: ubuntu-latest
+        steps:
+            # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+            - uses: actions/checkout@v2
+
+            # INstall Node on the runner
+            - name: Install Node
+              uses: actions/setup-node@v1
+              with:
+                  node-version: "18.x"
+
+            # Install the newman command line utility and also install the html extra reporter
+            - name: Install newman
+              run: |
+                  npm install -g newman
+                  npm install -g newman-reporter-htmlextra
+
+            # Make directory to upload the test results
+            - name: Make Directory for results
+              run: mkdir -p testResults
+
+            # Run the POSTMAN collection
+            - name: Run POSTMAN collection
+              run: |
+                  newman run petstore.collection.json -r htmlextra --reporter-htmlextra-export testResults/index.html --reporter-htmlextra-darkTheme  > testResults/runreport1.html
+              continue-on-error: true
+
+            # Upload the contents of Test Results directory to workspace
+            - name: Output the run Details
+              uses: actions/upload-artifact@v2
+              with:
+                  name: RunReports
+                  path: testResults
+    deploy:
+        needs: test-and-report # Ensure that the 'build' job is completed successfully
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout target repository
+              uses: actions/checkout@v2
+              with:
+                  repository: Karpovich0/postman-tmdb # Replace with the target repository's owner and name
+                  ref: report # Replace with the branch where you want to push the report
+            - name: Download report artifact
+              uses: actions/download-artifact@v2
+              with:
+                  name: RunReports
+                  path:
+            - name: Commit and push report
+              run: |
+                  git config user.name "GitHub Actions"
+                  git config user.email "<actions@github.com>"
+                  git add index.html
+                  git commit -m "Add report"
+                  git push
